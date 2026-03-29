@@ -449,6 +449,41 @@ footer{
 ::-webkit-scrollbar-thumb:hover{background:var(--gold);}
 
 @media(max-width:480px){:root{--card-w:145px}h1{font-size:3.8rem}}
+
+/* ── EXPORT / IMPORT BAR ─────────────────────────────────────────────── */
+.sync-bar{
+  position:relative;z-index:1;
+  max-width:1240px;margin:0 auto 0;padding:0 20px 14px;
+  display:flex;align-items:center;gap:8px;flex-wrap:wrap;
+}
+.sync-label{
+  font-family:'Rajdhani',sans-serif;font-size:10px;font-weight:700;
+  letter-spacing:3px;text-transform:uppercase;color:var(--muted);
+  margin-right:4px;white-space:nowrap;
+}
+.sync-btn{
+  background:rgba(4,8,15,0.8);
+  border:1px solid var(--border2);
+  color:var(--muted2);cursor:pointer;
+  font-family:'Rajdhani',sans-serif;font-size:12px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;
+  padding:6px 16px;
+  transition:all .15s;white-space:nowrap;
+  clip-path:polygon(6px 0%,100% 0%,calc(100% - 6px) 100%,0% 100%);
+  display:flex;align-items:center;gap:7px;
+}
+.sync-btn:hover{background:var(--gold-dim);color:var(--gold);border-color:var(--gold);}
+.sync-btn.import-btn:hover{background:var(--blue-dim);color:var(--blue);border-color:var(--blue);}
+.sync-btn svg{width:13px;height:13px;flex-shrink:0;}
+.sync-toast{
+  font-family:'Rajdhani',sans-serif;font-size:11px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;
+  color:var(--green);padding:5px 12px;
+  border:1px solid rgba(34,197,94,.3);
+  background:rgba(34,197,94,.08);
+  clip-path:polygon(6px 0%,100% 0%,calc(100% - 6px) 100%,0% 100%);
+  opacity:0;transition:opacity .3s;
+}
+.sync-toast.err{color:var(--red);border-color:rgba(239,68,68,.3);background:rgba(239,68,68,.08);}
+.sync-toast.show{opacity:1;}
 </style>
 </head>
 <body>
@@ -530,6 +565,24 @@ footer{
       <button class="view-btn" id="listViewBtn" title="List view" onclick="setView('list')">☰</button>
     </div>
   </div>
+</div>
+
+<div class="sync-bar">
+  <span class="sync-label">Sync</span>
+  <button class="sync-btn" onclick="exportCollection()" title="Export your collection to a JSON file">
+    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
+      <path d="M8 2v8M5 7l3 3 3-3M2 12v1a1 1 0 001 1h10a1 1 0 001-1v-1"/>
+    </svg>
+    Export Collection
+  </button>
+  <button class="sync-btn import-btn" onclick="document.getElementById('importFile').click()" title="Import a previously exported JSON file">
+    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
+      <path d="M8 10V2M5 5l3-3 3 3M2 12v1a1 1 0 001 1h10a1 1 0 001-1v-1"/>
+    </svg>
+    Import Collection
+  </button>
+  <input type="file" id="importFile" accept=".json" style="display:none" onchange="importCollection(event)">
+  <span class="sync-toast" id="syncToast"></span>
 </div>
 
 <div id="output"></div>
@@ -691,6 +744,54 @@ waveFilters.forEach(w=>{
   });
   filtersEl.appendChild(btn);
 });
+
+
+// ── EXPORT / IMPORT ───────────────────────────────────────────────────────
+function exportCollection(){
+  const data = {
+    version: 1,
+    app: "destiny-funko-pop",
+    exported: new Date().toISOString(),
+    owned: [...owned]
+  };
+  const blob = new Blob([JSON.stringify(data, null, 2)], {type:"application/json"});
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "destiny-funko-owned-" + new Date().toISOString().slice(0,10) + ".json";
+  a.click();
+  URL.revokeObjectURL(a.href);
+  showToast("Collection exported!", false);
+}
+
+function importCollection(event){
+  const file = event.target.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = function(e){
+    try{
+      const data = JSON.parse(e.target.result);
+      if(!data.owned || !Array.isArray(data.owned)) throw new Error("Invalid file");
+      if(data.app && data.app !== "destiny-funko-pop") throw new Error("Wrong collection file");
+      owned.clear();
+      data.owned.forEach(k => owned.add(k));
+      localStorage.setItem("destiny_owned", JSON.stringify([...owned]));
+      render();
+      showToast("Imported " + owned.size + " items!", false);
+    } catch(err){
+      showToast("Error: " + err.message, true);
+    }
+    // reset input so same file can be re-imported
+    event.target.value = "";
+  };
+  reader.readAsText(file);
+}
+
+function showToast(msg, isErr){
+  const t = document.getElementById("syncToast");
+  t.textContent = msg;
+  t.className = "sync-toast" + (isErr ? " err" : "") + " show";
+  setTimeout(() => { t.classList.remove("show"); }, 3000);
+}
 
 updateStats();render();
 document.getElementById("search").addEventListener("input",render);
